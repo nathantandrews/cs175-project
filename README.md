@@ -16,4 +16,4 @@ Run the docker image to create a container
 
 Execute the container 
 
-`docker exec -it model bash ` or `docker exec -it model python main.py`
+`docker exec -it model bash ` or `docker exec -it model python src/main.py`
