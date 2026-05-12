@@ -1,6 +1,7 @@
 cloudpickle==3.1.2
 Farama-Notifications==0.0.6
 gymnasium==1.3.0
+security-gym==0.3.3
 numpy==2.4.4
 typing_extensions==4.15.0
 security-gym==0.3.3
