@@ -1,8 +1,9 @@
 import gymnasium as gym
 import numpy as np
 import security_gym
+import constants as const
 
-env = gym.make("SecurityLogStream-v1", db_path="data/exp_7d_brute.db")
+env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
 obs, info = env.reset()
 
 # obs is a dict of text channels + system stats
