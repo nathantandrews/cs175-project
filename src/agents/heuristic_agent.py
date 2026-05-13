@@ -1,28 +1,9 @@
-import gymnasium as gym
-import numpy as np
-import security_gym
-import constants as const
+class HeuristicAgent:
+    def __init__(self, env):
+        self.env = env
 
-env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
-obs, info = env.reset()
-
-# obs is a dict of text channels + system stats
-print(obs["auth_log"][:200])   # Raw auth log lines
-print(obs["system_stats"])     # [load_avg, mem_used, disk_used]
-
-while True:
-    # Choose an action
-    action = {
-        "action": 0,  # pass (monitor only)
-        "risk_score": np.array([0.0], dtype=np.float32),
-    }
-
-    obs, reward, terminated, truncated, info = env.step(action)
-
-    # Ground truth (for evaluation, not visible to agent)
-    gt = info["ground_truth"]
-    print(f"{info['timestamp']} | malicious={gt['is_malicious']} | "
-          f"risk={gt['true_risk']:.1f} | reward={reward:.2f}")
-
-    if truncated:  # End of data
-        break
+    def act(self, observation):
+        # Implement a simple heuristic based on the environment's observation
+        # For example, if the observation is a vector of features, we can use a simple rule
+        # Here, we will just return a random action for demonstration purposes
+        return self.env.action_space.sample()
