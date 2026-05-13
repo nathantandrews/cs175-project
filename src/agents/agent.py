@@ -8,6 +8,8 @@ class Agent(ABC):
     Subclasses must implement `get_action`.
     """
 
+    name = "BaseAgent"
+
     def __init__(self, env):
         self.env = env
 
