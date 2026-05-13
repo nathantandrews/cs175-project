@@ -1,38 +1,37 @@
 import gymnasium as gym
 import numpy as np
 import security_gym
-import constants as const
+import tqdm
+import os
+import copy
 
-# env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
-# obs, info = env.reset()
+import utils.constants as const
+from agents.dueling_dqn_agent import DQNAgent
+from utils.argparse import parse_args
 
-# # obs is a dict of text channels + system stats
-# print(obs["auth_log"][:200])   # Raw auth log lines
-# print(obs["system_stats"])     # [load_avg, mem_used, disk_used]
+def train(env, agent : DQNAgent, num_episodes=10000):
+    pbar = tqdm.tqdm(range(num_episodes), desc="Training...")
+    for episode in pbar:
+        state, _ = env.reset()
 
-# while True:
-#     # Choose an action
-#     action = {
-#         "action": 0,  # pass (monitor only)
-#         "risk_score": np.array([0.0], dtype=np.float32),
-#     }
+        done = False
+        while not done:
+            action = agent.get_action(state)
+            next_state, reward, done, _, _ = env.step(action)
+            agent.update(state, action, reward, next_state, done)
+            state = next_state
+        agent.epsilon_decay()
+        agent.rewards.append(reward)
+        if (episode+1) % 100 == 0:
+            pbar.set_description(f"Episode {episode+1}/{num_episodes}, avg reward (last 100)={np.mean(agent.rewards[-100:]):.2f}")
+    return agent.Q, agent.rewards
 
-#     obs, reward, terminated, truncated, info = env.step(action)
-
-#     # Ground truth (for evaluation, not visible to agent)
-#     gt = info["ground_truth"]
-#     print(f"{info['timestamp']} | malicious={gt['is_malicious']} | "
-#           f"risk={gt['true_risk']:.1f} | reward={reward:.2f}")
-
-#     if truncated:  # End of data
-#         break
-      
-      
 def main():
-  env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
+  args = parse_args()
   os.makedirs(args.output, exist_ok=True)
+  env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
   obs, info = env.reset()
-  agent = QLearningAgent(
+  agent = DQNAgent(
       env,
       gamma=args.gamma,
       alpha=args.alpha,
@@ -41,9 +40,7 @@ def main():
       min_eps=args.min_eps
   )
   Q, rewards = train(env, agent, num_episodes=args.num_episodes)
-  video_dir = os.path.join(args.output, "videos")
-  eval_video(env, agent, video_dir, num_videos=args.num_videos)
-  submit_video(video_dir)
   plot_learning_curve(rewards, os.path.join(args.output, "plot.png"))
-  shutil.rmtree(video_dir)
 
+if __name__ == "__main__":
+  main()
