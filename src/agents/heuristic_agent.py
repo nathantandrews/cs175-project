@@ -1,10 +1,10 @@
 import numpy as np 
-import constants as const
-
+import utils.constants as const
+# Plot everything 
 
 class HeuristicAgent:
   def __init__(self, env):
-      self.env = env
+    self.env = env
 
   def get_action(self, state):
     """
@@ -17,36 +17,30 @@ class HeuristicAgent:
     
    
     action = const.PASS_ACTION
-    risk_score = 0.0
+
 
     
     critical_signatures = ["jndi:ldap", "package.loadlib", "luaopen_io"]
     if any(sig in web_log.lower() for sig in critical_signatures):
-        return {
-            "action": const.BLOCK_ACTION,
-            "risk_score": 10.0  # Maximum certainty
-        }
+      return const.BLOCK_ACTION
 
     
     failed_attempts = auth_log.lower().count("failed")
     
     if failed_attempts >= 5:
-        action = const.BLOCK_ACTION
-        risk_score = 9.0
+      action = const.BLOCK_ACTION
+
     elif failed_attempts >= 3:
-        action = const.THROTTLE_ACTION
-        risk_score = 6.5
+      action = const.THROTTLE_ACTION
+
     elif failed_attempts >= 1:
-        action = const.ALERT_ACTION
-        risk_score = 4.0
+      action = const.ALERT_ACTION
+
     
 
    
     if "success" in auth_log.lower() and failed_attempts == 0:
-        action = const.UNBLOCK_ACTION
-        risk_score = 1.0
+      action = const.UNBLOCK_ACTION
 
-    return {
-        "action": action,
-        "risk_score": risk_score
-    }
+
+    return action

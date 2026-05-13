@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import gymnasium as gym
 import numpy as np
 import security_gym
-import constants as const
+import utils.constants as const
 import matplotlib.pyplot as plt
 
 env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
@@ -22,6 +22,7 @@ reward_history = []
 
 while True:
     action = env.action_space.sample()
+    print('action', action, type(action))
     obs, reward, terminated, truncated, info = env.step(action)
     
     cumulative_reward += reward
