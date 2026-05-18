@@ -1,5 +1,8 @@
 import numpy as np
 
+# Does nothing, allows event to pass through unmodified
+PASS_ACTION = {"action": 0, "risk_score": np.array([0.0], dtype=np.float32)}
+
 # Block the current event's source IP (100% drop)
 BLOCK_ACTION = {"action": 3, "risk_score": np.array([8.0], dtype=np.float32)}
 
