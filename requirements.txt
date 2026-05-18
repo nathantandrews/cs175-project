@@ -17,3 +17,5 @@ security-gym==0.3.3
 six==1.17.0
 tqdm==4.67.3
 typing_extensions==4.15.0
+tqdm
+matplotlib
