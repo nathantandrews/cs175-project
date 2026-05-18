@@ -19,6 +19,11 @@ class Agent(ABC):
         """Return an action given the current environment state."""
         raise NotImplementedError
 
+    @abstractmethod
+    def train(self, env, num_episodes):
+        """Train the agent. Returns Q and rewards."""
+        raise NotImplementedError
+
     def update(self, state, action, reward, next_state, done):
         """Learning step. No-op for non-learning agents."""
         pass

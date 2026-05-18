@@ -1,63 +1,51 @@
 import gymnasium as gym
-import numpy as np
 import security_gym
-import tqdm
 import os
-import copy
 
 import utils.constants as const
-
-# from agents.dueling_dqn_agent import DQNAgent
-from agents.agent import Agent
+from agents.random_agent import RandomAgent
 from agents.heuristic_agent import HeuristicAgent
-# from utils.argparse import parse_args
-from utils.plotting import plot_learning_curve
+from agents.dueling_dqn_agent import DQNAgent
+from utils.argparse import parse_args
+from utils.plot import plot_learning_curve
 
 
-def train(env, agent: Agent, num_episodes=10000):
-    """Train the agent in the environment. Works on any agent inheriting from the base Agent class."""
-    pbar = tqdm.tqdm(range(num_episodes), desc="Training...")
-    for episode in pbar:
-      state, _ = env.reset()
-
-      terminated = False
-      truncated = False
-      while not terminated and not truncated:
-        action = agent.get_action(state)
-        obs, reward, terminated, truncated, info = env.step(action)
-        agent.update(state, action, reward, obs, terminated or truncated)
-        state = obs
-      agent.epsilon_decay()
-      agent.rewards.append(reward)
-      if (episode + 1) % 100 == 0:
-          pbar.set_description(
-            f"Episode {episode+1}/{num_episodes}, avg reward (last 100)={np.mean(agent.rewards[-100:]):.2f}"
-          )
-    return agent.rewards
+def build_agent(agent_name, env, args):
+  if agent_name == "random":
+    return RandomAgent(env)
+  elif agent_name == "heuristic":
+    return HeuristicAgent(env)
+  elif agent_name == "dqn":
+    return DQNAgent(
+        env,
+        gamma=args.gamma,
+        alpha=args.alpha,
+        epsilon=args.epsilon,
+        decay_rate=args.decay_rate,
+        min_eps=args.min_eps,
+    )
+  else:
+    raise ValueError(f"Unknown agent: {agent_name}")
 
 
 def main():
-    # args = parse_args()
-    output = "output"
-    num_episodes = 200
-    os.makedirs(output, exist_ok=True)
-    env = gym.make("SecurityLogStream-v1", db_path=const.BRUTE_7D_FILEPATH)
-    obs, _ = env.reset()
-    # agent = DQNAgent(
-    #     env,
-    #     gamma=args.gamma,
-    #     alpha=args.alpha,
-    #     epsilon=args.epsilon,
-    #     decay_rate=args.decay_rate,
-    #     min_eps=args.min_eps,
-    # )
-    agent = HeuristicAgent(env)
-    rewards = train(env, agent, num_episodes=num_episodes)
-    plot_learning_curve(rewards, os.path.join(output, "plot.png"))
-    print(f"Training complete. Plot saved to {os.path.join(output, 'plot.png')}")
-    print("Cumulated reward:", sum(rewards))
+  args = parse_args()
+  os.makedirs(args.output_dir, exist_ok=True)
 
+  db_path = const.DATASETS[args.dataset]
+  env = gym.make("SecurityLogStream-v1", db_path=db_path, disable_env_checker=True)
+  obs, info = env.reset()
 
+  agent = build_agent(args.agent, env, args)
+  print(f"Running {agent.name}...")
+
+  Q, rewards = agent.train(env, num_episodes=args.num_episodes)
+
+  plot_learning_curve(
+      rewards,
+      label=agent.name,
+      output_filepath=os.path.join(args.output_dir, f"{args.agent}_plot.png"),
+  )
 
 if __name__ == "__main__":
   main()

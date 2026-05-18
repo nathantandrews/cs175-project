@@ -19,5 +19,18 @@ UNBLOCK_ACTION = {"action": 4, "risk_score": np.array([1.0], dtype=np.float32)}
 ISOLATE_ACTION = {"action": 5, "risk_score": np.array([10.0], dtype=np.float32)}
 
 # Dataset paths
-BRUTE_7D_FILEPATH = "data/exp_7d_brute.db"
+BENIGN_V3_FILEPATH = "data/benign_v3.db"
+CAMPAIGNS_V2_FILEPATH = "data/campaigns_v2.db"
+EXP01_90D_FILEPATH = "data/exp01_90d.db"
+EXP_30D_HEAVY_FILEPATH = "data/exp_30d_heavy.db"
+EXP_365D_REALISTIC_FILEPATH = "data/exp_365d_realistic.db"
+EXP_7D_BRUTE_FILEPATH = "data/exp_7d_brute.db"
 
+DATASETS = {
+    "benign_v3": BENIGN_V3_FILEPATH,
+    "campaigns_v2": CAMPAIGNS_V2_FILEPATH,
+    "exp01_90d": EXP01_90D_FILEPATH,
+    "exp_30d_heavy": EXP_30D_HEAVY_FILEPATH,
+    "exp_365d_realistic": EXP_365D_REALISTIC_FILEPATH,
+    "exp_7d_brute": EXP_7D_BRUTE_FILEPATH,
+}
