@@ -1,10 +1,10 @@
-import numpy as np 
 import utils.constants as const
-# Plot everything 
+from agents.agent import Agent
 
-class HeuristicAgent:
+
+class HeuristicAgent(Agent):
   def __init__(self, env):
-    self.env = env
+    super().__init__(env)
 
   def get_action(self, state):
     """

@@ -12,6 +12,7 @@ class Agent(ABC):
 
     def __init__(self, env):
         self.env = env
+        self.rewards = []
 
     @abstractmethod
     def get_action(self, state):
