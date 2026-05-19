@@ -33,7 +33,7 @@ def main():
   os.makedirs(args.output_dir, exist_ok=True)
 
   db_path = const.DATASETS[args.dataset]
-  env = gym.make("SecurityLogStream-v1", db_path=db_path, disable_env_checker=True)
+  env = gym.make(args.env, db_path=db_path, disable_env_checker=True)
   obs, info = env.reset()
 
   agent = build_agent(args.agent, env, args)
