@@ -365,6 +365,34 @@ class DQNAgent(Agent):
 
         return self._q_net, all_rewards
 
+    def save(self, filepath):
+        """Save the Q-network weights to a file."""
+        if self._q_net is None:
+            raise ValueError("Cannot save weights; network not initialized.")
+        weights = {
+            "W1": self._q_net.W1, "b1": self._q_net.b1,
+            "W2": self._q_net.W2, "b2": self._q_net.b2,
+            "Wv": self._q_net.Wv, "bv": self._q_net.bv,
+            "Wa": self._q_net.Wa, "ba": self._q_net.ba
+        }
+        np.savez(filepath, **weights)
+        print(f"Agent weights saved to {filepath}")
+
+    def load(self, filepath, obs_sample):
+        """Load Q-network weights and initialize the networks."""
+        self._ensure_networks(obs_sample)  # Build network structure first
+        data = np.load(filepath)
+        self._q_net.W1 = data["W1"]
+        self._q_net.b1 = data["b1"]
+        self._q_net.W2 = data["W2"]
+        self._q_net.b2 = data["b2"]
+        self._q_net.Wv = data["Wv"]
+        self._q_net.bv = data["bv"]
+        self._q_net.Wa = data["Wa"]
+        self._q_net.ba = data["ba"]
+        self._target_net.copy_weights_from(self._q_net)
+        print(f"Agent weights loaded from {filepath}")
+
     # ---- internal ---------------------------------------------------------
 
     def _learn(self):
