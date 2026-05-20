@@ -8,7 +8,7 @@ class Agent(ABC):
     Subclasses must implement `get_action`.
     """
 
-    name = "BaseAgent"
+    name = "Default Agent"
 
     def __init__(self, env):
         self.env = env
@@ -19,19 +19,10 @@ class Agent(ABC):
         """Return an action given the current environment state."""
         raise NotImplementedError
 
-    @abstractmethod
     def train(self, env, num_episodes):
-        """Train the agent. Returns Q and rewards."""
-        raise NotImplementedError
-
-    def update(self, state, action, reward, next_state, done):
-        """Learning step. No-op for non-learning agents."""
+        """Train the agent. No-op for agents without training."""
         pass
 
     def epsilon_decay(self):
         """Decay exploration rate. No-op for agents without epsilon."""
-        pass
-
-    def reset(self):
-        """Reset any per-episode internal state."""
         pass

@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument("--gamma", type=float, default=0.95)
     parser.add_argument("--alpha", type=float, default=0.8)
     parser.add_argument("--epsilon", type=float, default=1.0)
-    parser.add_argument("--decay-rate", type=float, default=0.9999)
+    parser.add_argument("--decay-rate", type=float, default=0.95)
     parser.add_argument("--min-eps", type=float, default=1e-4)
     parser.add_argument("--env", type=str, default="SecurityLogStream-v1")
     parser.add_argument("--num-episodes", type=int, default=100)

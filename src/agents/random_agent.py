@@ -6,6 +6,9 @@ class RandomAgent(Agent):
     """
     name = "Random Agent"
 
+    def __init__(self, env):
+      super().__init__(env)
+
     def get_action(self, state):
         """Return a random action from the environment's action space."""
         return self.env.action_space.sample()

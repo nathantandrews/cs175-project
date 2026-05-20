@@ -3,14 +3,17 @@ from agents.agent import Agent
 
 
 class HeuristicAgent(Agent):
+  """
+  A heuristic agent that combines keyword detection, rate-limiting, 
+  and threat-level estimation.
+  """
+  name = "Heuristic Agent"
+  
   def __init__(self, env):
     super().__init__(env)
 
   def get_action(self, state):
-    """
-    Hybrid Heuristic: Combines keyword detection, rate-limiting, 
-    and threat-level estimation.
-    """
+
     
     auth_log = state['auth_log']
     web_log = state['web_log']
@@ -44,3 +47,8 @@ class HeuristicAgent(Agent):
 
 
     return action
+
+  def train(self, env, num_episodes):
+      """Heuristic agent doesn't train. Returns dummy values."""
+      print(f"Heuristic Agent: No training required for {num_episodes} episodes.")
+      return None, []

@@ -1,5 +1,7 @@
 import numpy as np
 
+NUM_DISCRETE_ACTIONS = 6
+
 # Does nothing, allows event to pass through unmodified
 PASS_ACTION = {"action": 0, "risk_score": np.array([0.0], dtype=np.float32)}
 
@@ -17,6 +19,15 @@ UNBLOCK_ACTION = {"action": 4, "risk_score": np.array([1.0], dtype=np.float32)}
 
 # Quarantine server (blocks all network events)
 ISOLATE_ACTION = {"action": 5, "risk_score": np.array([10.0], dtype=np.float32)}
+
+ACTION_MAP = {
+    0: PASS_ACTION,
+    1: ALERT_ACTION,
+    2: THROTTLE_ACTION,
+    3: BLOCK_ACTION,
+    4: UNBLOCK_ACTION,
+    5: ISOLATE_ACTION,
+}
 
 # Dataset paths
 BENIGN_V3_FILEPATH = "data/benign_v3.db"

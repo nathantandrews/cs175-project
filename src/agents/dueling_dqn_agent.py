@@ -3,6 +3,7 @@ from collections import deque
 import random
 
 from agents.agent import Agent
+import utils.constants as const
 
 
 class ReplayBuffer:
@@ -55,34 +56,6 @@ def _flatten_obs(obs):
         return np.zeros(1, dtype=np.float32)
     # tuple / list – try to convert
     return np.array(obs, dtype=np.float32).flatten()
-
-
-def _action_index_to_env_action(action_idx):
-    """
-    Map a discrete action index (0-5) to the Dict action expected by
-    SecurityLogStream-v1.
-
-    Actions (from constants.py):
-        0 – pass          risk_score 0.0
-        1 – alert         risk_score 7.0
-        2 – throttle      risk_score 5.0
-        3 – block_source  risk_score 8.0
-        4 – unblock       risk_score 1.0
-        5 – isolate       risk_score 10.0
-    """
-    risk_map = {
-        0: 0.0,
-        1: 7.0,
-        2: 5.0,
-        3: 8.0,
-        4: 1.0,
-        5: 10.0,
-    }
-    return {
-        "action": action_idx,
-        "risk_score": np.array([risk_map.get(action_idx, 0.0)], dtype=np.float32),
-    }
-
 
 # ---------------------------------------------------------------------------
 # Dueling DQN with a simple NumPy MLP (no PyTorch / TensorFlow dependency)
@@ -237,12 +210,9 @@ class DuelingMLP:
         self.Wa = other.Wa.copy()
         self.ba = other.ba.copy()
 
-
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
-
-NUM_DISCRETE_ACTIONS = 6
 
 class DQNAgent(Agent):
     """
@@ -254,7 +224,7 @@ class DQNAgent(Agent):
       - epsilon-greedy exploration with exponential decay
     """
 
-    name = "DQN Agent"
+    name = "Dueling DQN Agent"
 
     def __init__(
         self,
@@ -294,10 +264,10 @@ class DQNAgent(Agent):
         state = _flatten_obs(obs)
         self._input_dim = state.shape[0]
         self._q_net = DuelingMLP(
-            self._input_dim, self.hidden_dim, NUM_DISCRETE_ACTIONS, lr=self.alpha
+            self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS, lr=self.alpha
         )
         self._target_net = DuelingMLP(
-            self._input_dim, self.hidden_dim, NUM_DISCRETE_ACTIONS, lr=self.alpha
+            self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS, lr=self.alpha
         )
         self._target_net.copy_weights_from(self._q_net)
 
@@ -313,12 +283,11 @@ class DQNAgent(Agent):
         flat = _flatten_obs(state)
 
         if np.random.random() < self.epsilon:
-            action_idx = np.random.randint(NUM_DISCRETE_ACTIONS)
+            action_idx = np.random.randint(const.NUM_DISCRETE_ACTIONS)
         else:
             q_values = self._q_net.forward(flat)
             action_idx = int(np.argmax(q_values))
-
-        return _action_index_to_env_action(action_idx), action_idx
+        return const.ACTION_MAP.get(action_idx, const.PASS_ACTION), action_idx
 
     def epsilon_decay(self):
         """Exponentially decay epsilon towards min_eps."""
