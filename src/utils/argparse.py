@@ -12,6 +12,6 @@ def parse_args():
     parser.add_argument("--min-eps", type=float, default=1e-4)
     parser.add_argument("-env", "--env", type=str, default="SecurityLogStream-v1")
     parser.add_argument("--num-episodes", type=int, default=100)
-    parser.add_argument("--mode", type=str, choices=["train", "test"], default="train", help="Mode to run (train or test)")
+    parser.add_argument("--mode", type=str, choices=["train", "test", "grid_search"], default="train", help="Mode to run (train, test, or grid_search)")
     parser.add_argument("--model-path", type=str, default=None, help="Path to load/save model weights (.npz)")
     return parser.parse_args()

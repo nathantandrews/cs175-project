@@ -1,6 +1,10 @@
 import numpy as np
 from collections import deque
 import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 
 from agents.agent import Agent
 import utils.constants as const
@@ -57,158 +61,41 @@ def _flatten_obs(obs):
     # tuple / list – try to convert
     return np.array(obs, dtype=np.float32).flatten()
 
+
 # ---------------------------------------------------------------------------
-# Dueling DQN with a simple NumPy MLP (no PyTorch / TensorFlow dependency)
+# Dueling DQN with PyTorch
 # ---------------------------------------------------------------------------
 
-class DuelingMLP:
+class DuelingMLP(nn.Module):
     """
     A small multi-layer perceptron that outputs Q-values via the dueling
     architecture:  Q(s,a) = V(s) + A(s,a) - mean(A(s,:))
-
-    Layers
-    ------
-    input  → hidden (ReLU) → hidden (ReLU)
-                                ├─ value stream  → V  (scalar)
-                                └─ advantage stream → A  (num_actions)
-
-    All weights are updated with vanilla SGD.
     """
 
-    def __init__(self, input_dim, hidden_dim, num_actions, lr=1e-3):
+    def __init__(self, input_dim, hidden_dim, num_actions):
+        super(DuelingMLP, self).__init__()
         self.num_actions = num_actions
-        self.lr = lr
-
-        # Xavier-style initialisation
-        def _init(rows, cols):
-            scale = np.sqrt(2.0 / (rows + cols))
-            return np.random.randn(rows, cols).astype(np.float32) * scale
-
-        # Shared layers
-        self.W1 = _init(input_dim, hidden_dim)
-        self.b1 = np.zeros(hidden_dim, dtype=np.float32)
-        self.W2 = _init(hidden_dim, hidden_dim)
-        self.b2 = np.zeros(hidden_dim, dtype=np.float32)
+        
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
 
         # Value stream  (hidden → 1)
-        self.Wv = _init(hidden_dim, 1)
-        self.bv = np.zeros(1, dtype=np.float32)
+        self.value_stream = nn.Linear(hidden_dim, 1)
 
         # Advantage stream  (hidden → num_actions)
-        self.Wa = _init(hidden_dim, num_actions)
-        self.ba = np.zeros(num_actions, dtype=np.float32)
-
-    # ----- forward pass ----------------------------------------------------
-
-    @staticmethod
-    def _relu(x):
-        return np.maximum(0, x)
+        self.advantage_stream = nn.Linear(hidden_dim, num_actions)
 
     def forward(self, x):
-        """Return Q-values for a single state vector *x* (1-D)."""
-        h1 = self._relu(x @ self.W1 + self.b1)
-        h2 = self._relu(h1 @ self.W2 + self.b2)
+        h1 = F.relu(self.fc1(x))
+        h2 = F.relu(self.fc2(h1))
 
-        value = h2 @ self.Wv + self.bv          # (1,)
-        advantage = h2 @ self.Wa + self.ba       # (num_actions,)
+        value = self.value_stream(h2)
+        advantage = self.advantage_stream(h2)
 
         # Dueling combination
-        q = value + advantage - advantage.mean()
+        q = value + advantage - advantage.mean(dim=-1, keepdim=True)
         return q
 
-    def forward_batch(self, X):
-        """Return Q-values for a batch of states *X* (2-D)."""
-        H1 = self._relu(X @ self.W1 + self.b1)
-        H2 = self._relu(H1 @ self.W2 + self.b2)
-
-        V = H2 @ self.Wv + self.bv               # (batch, 1)
-        A = H2 @ self.Wa + self.ba                # (batch, num_actions)
-
-        Q = V + A - A.mean(axis=1, keepdims=True)
-        return Q, H1, H2, V, A
-
-    # ----- backward pass (vanilla SGD) ------------------------------------
-
-    def update(self, states, actions, targets):
-        """
-        One gradient-descent step.
-
-        Parameters
-        ----------
-        states  : (batch, input_dim)
-        actions : (batch,)  int indices
-        targets : (batch,)  TD-target values for the chosen actions
-        """
-        batch_size = states.shape[0]
-
-        # --- forward ---
-        H1 = self._relu(states @ self.W1 + self.b1)
-        H2 = self._relu(H1 @ self.W2 + self.b2)
-        V = H2 @ self.Wv + self.bv
-        A = H2 @ self.Wa + self.ba
-        Q = V + A - A.mean(axis=1, keepdims=True)
-
-        # --- loss = 0.5 * (Q[a] - target)^2 ---
-        q_pred = Q[np.arange(batch_size), actions.astype(int)]
-        error = q_pred - targets                  # (batch,)
-
-        # --- gradient of Q w.r.t. V and A ---
-        dQ = np.zeros_like(Q)
-        dQ[np.arange(batch_size), actions.astype(int)] = error / batch_size
-
-        # Dueling backprop:  Q = V + A - mean(A)
-        dA = dQ - dQ.mean(axis=1, keepdims=True)
-        dV = dQ.sum(axis=1, keepdims=True)
-
-        # Advantage head
-        dWa = H2.T @ dA
-        dba = dA.sum(axis=0)
-
-        # Value head
-        dWv = H2.T @ dV
-        dbv = dV.sum(axis=0)
-
-        # Shared layer 2
-        dH2 = dA @ self.Wa.T + dV @ self.Wv.T
-        dH2 = dH2 * (H2 > 0)                     # ReLU grad
-
-        dW2 = H1.T @ dH2
-        db2 = dH2.sum(axis=0)
-
-        # Shared layer 1
-        dH1 = dH2 @ self.W2.T
-        dH1 = dH1 * (H1 > 0)
-
-        dW1 = states.T @ dH1
-        db1 = dH1.sum(axis=0)
-
-        # Gradient clipping (max-norm)
-        max_norm = 1.0
-        for g in [dW1, db1, dW2, db2, dWv, dbv, dWa, dba]:
-            norm = np.linalg.norm(g)
-            if norm > max_norm:
-                g *= max_norm / norm
-
-        # SGD step
-        self.W1 -= self.lr * dW1
-        self.b1 -= self.lr * db1
-        self.W2 -= self.lr * dW2
-        self.b2 -= self.lr * db2
-        self.Wv -= self.lr * dWv
-        self.bv -= self.lr * dbv
-        self.Wa -= self.lr * dWa
-        self.ba -= self.lr * dba
-
-    def copy_weights_from(self, other):
-        """Hard-copy weights from *other* network (for target network)."""
-        self.W1 = other.W1.copy()
-        self.b1 = other.b1.copy()
-        self.W2 = other.W2.copy()
-        self.b2 = other.b2.copy()
-        self.Wv = other.Wv.copy()
-        self.bv = other.bv.copy()
-        self.Wa = other.Wa.copy()
-        self.ba = other.ba.copy()
 
 # ---------------------------------------------------------------------------
 # Agent
@@ -218,7 +105,7 @@ class DQNAgent(Agent):
     """
     Dueling DQN agent for SecurityLogStream-v1.
 
-    Uses a lightweight NumPy-only MLP with:
+    Uses a PyTorch MLP with:
       - experience replay
       - target network (hard-copy every ``target_update`` steps)
       - epsilon-greedy exploration with exponential decay
@@ -247,13 +134,19 @@ class DQNAgent(Agent):
         self.min_eps = min_eps
         self.batch_size = batch_size
         self.target_update = target_update
+        self.hidden_dim = hidden_dim
+
+        # Determine device
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"DQNAgent initialized using device: {self.device}")
 
         # Lazily initialised on the first observation
         self._input_dim = None
         self._q_net = None
         self._target_net = None
+        self.optimizer = None
+        self.criterion = None
 
-        self.hidden_dim = hidden_dim
         self.replay_buffer = ReplayBuffer(capacity=buffer_capacity)
 
     # ---- lazy init --------------------------------------------------------
@@ -263,13 +156,14 @@ class DQNAgent(Agent):
             return
         state = _flatten_obs(obs)
         self._input_dim = state.shape[0]
-        self._q_net = DuelingMLP(
-            self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS, lr=self.alpha
-        )
-        self._target_net = DuelingMLP(
-            self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS, lr=self.alpha
-        )
-        self._target_net.copy_weights_from(self._q_net)
+        
+        self._q_net = DuelingMLP(self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS).to(self.device)
+        self._target_net = DuelingMLP(self._input_dim, self.hidden_dim, const.NUM_DISCRETE_ACTIONS).to(self.device)
+        self._target_net.load_state_dict(self._q_net.state_dict())
+        self._target_net.eval()
+        
+        self.optimizer = optim.Adam(self._q_net.parameters(), lr=self.alpha)
+        self.criterion = nn.MSELoss()
 
     # ---- Agent interface --------------------------------------------------
 
@@ -285,83 +179,95 @@ class DQNAgent(Agent):
         if np.random.random() < self.epsilon:
             action_idx = np.random.randint(const.NUM_DISCRETE_ACTIONS)
         else:
-            q_values = self._q_net.forward(flat)
-            action_idx = int(np.argmax(q_values))
+            with torch.no_grad():
+                state_tensor = torch.FloatTensor(flat).unsqueeze(0).to(self.device)
+                q_values = self._q_net(state_tensor)
+                action_idx = int(torch.argmax(q_values).item())
         return const.ACTION_MAP.get(action_idx, const.PASS_ACTION), action_idx
 
     def epsilon_decay(self):
         """Exponentially decay epsilon towards min_eps."""
         self.epsilon = max(self.min_eps, self.epsilon * self.decay_rate)
 
-    def train(self, env, num_episodes=1):
+    def train(self, env, num_episodes=1, patience=3):
         """
         Train the agent on the SecurityLogStream environment.
-
-        Because SecurityLogStream is a continuous stream that runs until the
-        data is exhausted (``terminated`` is always False, ``truncated`` fires
-        once at the end), each "episode" is a full pass through the dataset.
-
-        Parameters
-        ----------
-        env : gymnasium.Env
-        num_episodes : int
-            Number of full episodes (environment resets) to train over.
-
-        Returns
-        -------
-        Q : DuelingMLP
-            The trained Q-network.
-        all_rewards : list[float]
-            Per-step rewards across all episodes (for plotting).
         """
         all_rewards = []
         global_step = 0
+        
+        best_reward = -float('inf')
+        patience_counter = 0
+        best_weights = None
 
-        for episode in range(num_episodes):
-            obs, info = env.reset()
-            self._ensure_networks(obs)
-            episode_reward = 0.0
-            step = 0
+        try:
+            for episode in range(num_episodes):
+                obs, info = env.reset()
+                self._ensure_networks(obs)
+                episode_reward = 0.0
+                step = 0
 
-            while True:
-                # Select action
-                env_action, action_idx = self.get_action(obs)
-                next_obs, reward, terminated, truncated, info = env.step(env_action)
+                while True:
+                    # Select action
+                    env_action, action_idx = self.get_action(obs)
+                    next_obs, reward, terminated, truncated, info = env.step(env_action)
 
-                # Store transition
-                flat_state = _flatten_obs(obs)
-                flat_next = _flatten_obs(next_obs)
-                done = terminated or truncated
-                self.replay_buffer.push(flat_state, action_idx, reward, flat_next, float(done))
+                    # Store transition
+                    flat_state = _flatten_obs(obs)
+                    flat_next = _flatten_obs(next_obs)
+                    done = terminated or truncated
+                    self.replay_buffer.push(flat_state, action_idx, reward, flat_next, float(done))
 
-                # Record reward
-                all_rewards.append(reward)
-                episode_reward += reward
-                step += 1
-                global_step += 1
+                    # Record reward
+                    all_rewards.append(reward)
+                    episode_reward += reward
+                    step += 1
+                    global_step += 1
 
-                # Learn from replay buffer
-                if len(self.replay_buffer) >= self.batch_size:
-                    self._learn()
+                    # Learn from replay buffer
+                    if len(self.replay_buffer) >= self.batch_size:
+                        self._learn()
 
-                # Sync target network
-                if global_step % self.target_update == 0:
-                    self._target_net.copy_weights_from(self._q_net)
+                    # Sync target network
+                    if global_step % self.target_update == 0:
+                        self._target_net.load_state_dict(self._q_net.state_dict())
 
-                # Decay exploration
-                self.epsilon_decay()
+                    # Decay exploration
+                    self.epsilon_decay()
 
-                obs = next_obs
+                    obs = next_obs
 
-                if done:
-                    break
+                    if done:
+                        break
 
-            print(
-                f"Episode {episode + 1}/{num_episodes} | "
-                f"Steps: {step} | "
-                f"Reward: {episode_reward:.2f} | "
-                f"Epsilon: {self.epsilon:.4f}"
-            )
+                print(
+                    f"Episode {episode + 1}/{num_episodes} | "
+                    f"Steps: {step} | "
+                    f"Reward: {episode_reward:.2f} | "
+                    f"Epsilon: {self.epsilon:.4f}"
+                )
+                
+                # Early stopping check
+                if episode_reward > best_reward:
+                    best_reward = episode_reward
+                    patience_counter = 0
+                    best_weights = {k: v.cpu().clone() for k, v in self._q_net.state_dict().items()}
+                else:
+                    patience_counter += 1
+                    print(f"  -> No improvement. Patience: {patience_counter}/{patience}")
+                    if patience_counter >= patience:
+                        print(f"\nEarly stopping triggered! Restoring best weights with reward: {best_reward:.2f}")
+                        if best_weights is not None:
+                            self._q_net.load_state_dict(best_weights)
+                            self._target_net.load_state_dict(best_weights)
+                        break
+
+        except KeyboardInterrupt:
+            print("\nTraining interrupted by user. Saving progress...")
+            if best_weights is not None and best_reward > episode_reward:
+                print(f"Restoring best weights so far (Reward: {best_reward:.2f}).")
+                self._q_net.load_state_dict(best_weights)
+                self._target_net.load_state_dict(best_weights)
 
         return self._q_net, all_rewards
 
@@ -369,28 +275,14 @@ class DQNAgent(Agent):
         """Save the Q-network weights to a file."""
         if self._q_net is None:
             raise ValueError("Cannot save weights; network not initialized.")
-        weights = {
-            "W1": self._q_net.W1, "b1": self._q_net.b1,
-            "W2": self._q_net.W2, "b2": self._q_net.b2,
-            "Wv": self._q_net.Wv, "bv": self._q_net.bv,
-            "Wa": self._q_net.Wa, "ba": self._q_net.ba
-        }
-        np.savez(filepath, **weights)
+        torch.save(self._q_net.state_dict(), filepath)
         print(f"Agent weights saved to {filepath}")
 
     def load(self, filepath, obs_sample):
         """Load Q-network weights and initialize the networks."""
         self._ensure_networks(obs_sample)  # Build network structure first
-        data = np.load(filepath)
-        self._q_net.W1 = data["W1"]
-        self._q_net.b1 = data["b1"]
-        self._q_net.W2 = data["W2"]
-        self._q_net.b2 = data["b2"]
-        self._q_net.Wv = data["Wv"]
-        self._q_net.bv = data["bv"]
-        self._q_net.Wa = data["Wa"]
-        self._q_net.ba = data["ba"]
-        self._target_net.copy_weights_from(self._q_net)
+        self._q_net.load_state_dict(torch.load(filepath, map_location=self.device, weights_only=True))
+        self._target_net.load_state_dict(self._q_net.state_dict())
         print(f"Agent weights loaded from {filepath}")
 
     # ---- internal ---------------------------------------------------------
@@ -400,14 +292,36 @@ class DQNAgent(Agent):
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(
             self.batch_size
         )
+        
+        # Convert to tensors
+        states = torch.FloatTensor(states).to(self.device)
+        actions = torch.LongTensor(actions).to(self.device)
+        rewards = torch.FloatTensor(rewards).to(self.device)
+        next_states = torch.FloatTensor(next_states).to(self.device)
+        dones = torch.FloatTensor(dones).to(self.device)
 
         # Double DQN target: use online net to pick action, target net to evaluate
-        q_next_online = self._q_net.forward_batch(next_states)[0]
-        best_actions = np.argmax(q_next_online, axis=1)
+        with torch.no_grad():
+            q_next_online = self._q_net(next_states)
+            best_actions = torch.argmax(q_next_online, dim=1)
 
-        q_next_target = self._target_net.forward_batch(next_states)[0]
-        q_target_vals = q_next_target[np.arange(self.batch_size), best_actions]
+            q_next_target = self._target_net(next_states)
+            q_target_vals = q_next_target[torch.arange(self.batch_size), best_actions]
 
-        targets = rewards + self.gamma * q_target_vals * (1.0 - dones)
+            targets = rewards + self.gamma * q_target_vals * (1.0 - dones)
 
-        self._q_net.update(states, actions, targets)
+        # Current Q values
+        q_values = self._q_net(states)
+        q_pred = q_values[torch.arange(self.batch_size), actions]
+
+        # Compute loss
+        loss = self.criterion(q_pred, targets)
+
+        # Optimize
+        self.optimizer.zero_grad()
+        loss.backward()
+        
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self._q_net.parameters(), 1.0)
+        
+        self.optimizer.step()

@@ -19,3 +19,4 @@ tqdm==4.67.3
 typing_extensions==4.15.0
 tqdm
 matplotlib
+torch
