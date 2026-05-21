@@ -4,7 +4,7 @@
 set -e
 
 echo "=== Step 1: Checking and downloading datasets ==="
-./scripts/download_datasets.sh
+./scripts/download-datasets.sh
 
 echo ""
 echo "=== Step 2: Checking Docker container ==="
