@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from agents.agent import Agent
 import utils.constants as const
@@ -36,12 +37,8 @@ class ReplayBuffer:
 
 def _flatten_obs(obs):
     """
-    Flatten a SecurityLogStream observation into a fixed-size numeric vector.
-
-    The observation is a Dict that may contain text channels (strings) and
-    numeric arrays.  We keep only the numeric parts so the Q-network can
-    consume them.  If the observation is already a flat array we return it
-    directly.
+    Your original flattener that gave +19k rewards. 
+    Kept exactly the same to preserve feature dimensions.
     """
     if isinstance(obs, np.ndarray):
         return obs.astype(np.float32).flatten()
@@ -53,12 +50,9 @@ def _flatten_obs(obs):
                 parts.append(val.astype(np.float32).flatten())
             elif isinstance(val, (int, float)):
                 parts.append(np.array([float(val)], dtype=np.float32))
-            # skip text / string channels
         if parts:
             return np.concatenate(parts)
-        # fallback: return a zero vector (will be resized on first call)
         return np.zeros(1, dtype=np.float32)
-    # tuple / list – try to convert
     return np.array(obs, dtype=np.float32).flatten()
 
 
@@ -67,10 +61,7 @@ def _flatten_obs(obs):
 # ---------------------------------------------------------------------------
 
 class DuelingMLP(nn.Module):
-    """
-    A small multi-layer perceptron that outputs Q-values via the dueling
-    architecture:  Q(s,a) = V(s) + A(s,a) - mean(A(s,:))
-    """
+    """Your original high-performing network architecture."""
 
     def __init__(self, input_dim, hidden_dim, num_actions):
         super(DuelingMLP, self).__init__()
@@ -79,10 +70,7 @@ class DuelingMLP(nn.Module):
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
 
-        # Value stream  (hidden → 1)
         self.value_stream = nn.Linear(hidden_dim, 1)
-
-        # Advantage stream  (hidden → num_actions)
         self.advantage_stream = nn.Linear(hidden_dim, num_actions)
 
     def forward(self, x):
@@ -92,7 +80,6 @@ class DuelingMLP(nn.Module):
         value = self.value_stream(h2)
         advantage = self.advantage_stream(h2)
 
-        # Dueling combination
         q = value + advantage - advantage.mean(dim=-1, keepdim=True)
         return q
 
@@ -103,12 +90,8 @@ class DuelingMLP(nn.Module):
 
 class DQNAgent(Agent):
     """
-    Dueling DQN agent for SecurityLogStream-v1.
-
-    Uses a PyTorch MLP with:
-      - experience replay
-      - target network (hard-copy every ``target_update`` steps)
-      - epsilon-greedy exploration with exponential decay
+    Dueling DQN agent matching your original performance, upgraded with safe 
+    TensorBoard KPI tracking for rewards, steps, and TD Loss.
     """
 
     name = "Dueling DQN Agent"
@@ -125,6 +108,7 @@ class DQNAgent(Agent):
         buffer_capacity=50000,
         batch_size=64,
         target_update=1000,
+        log_dir="runs/security_dqn"
     ):
         super().__init__(env)
         self.gamma = gamma
@@ -136,11 +120,12 @@ class DQNAgent(Agent):
         self.target_update = target_update
         self.hidden_dim = hidden_dim
 
-        # Determine device
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"DQNAgent initialized using device: {self.device}")
 
-        # Lazily initialised on the first observation
+        # Safe TensorBoard logger
+        self.writer = SummaryWriter(log_dir=log_dir)
+
         self._input_dim = None
         self._q_net = None
         self._target_net = None
@@ -148,8 +133,6 @@ class DQNAgent(Agent):
         self.criterion = None
 
         self.replay_buffer = ReplayBuffer(capacity=buffer_capacity)
-
-    # ---- lazy init --------------------------------------------------------
 
     def _ensure_networks(self, obs):
         if self._q_net is not None:
@@ -165,37 +148,46 @@ class DQNAgent(Agent):
         self.optimizer = optim.Adam(self._q_net.parameters(), lr=self.alpha)
         self.criterion = nn.MSELoss()
 
-    # ---- Agent interface --------------------------------------------------
-
-    def get_action(self, state):
-        """
-        Epsilon-greedy action selection.
-
-        Returns the Dict action expected by SecurityLogStream-v1.
-        """
+    def get_action(self, state, deterministic=False):
+        """Your exact action selection logic, returning pristine env constants."""
         self._ensure_networks(state)
         flat = _flatten_obs(state)
 
-        if np.random.random() < self.epsilon:
+        if not deterministic and np.random.random() < self.epsilon:
             action_idx = np.random.randint(const.NUM_DISCRETE_ACTIONS)
         else:
             with torch.no_grad():
                 state_tensor = torch.FloatTensor(flat).unsqueeze(0).to(self.device)
                 q_values = self._q_net(state_tensor)
                 action_idx = int(torch.argmax(q_values).item())
+        
+        # Pull the pristine dictionary mapping (e.g. BLOCK_ACTION) directly
         return const.ACTION_MAP.get(action_idx, const.PASS_ACTION), action_idx
 
     def epsilon_decay(self):
-        """Exponentially decay epsilon towards min_eps."""
         self.epsilon = max(self.min_eps, self.epsilon * self.decay_rate)
 
-    def train(self, env, num_episodes=1, patience=3):
-        """
-        Train the agent on the SecurityLogStream environment.
-        """
+    def evaluate_test_epoch(self, env, test_episodes=2):
+        """Runs an isolated deterministic test epoch to track reward-per-step KPIs."""
+        total_reward = 0.0
+        total_steps = 0
+
+        for _ in range(test_episodes):
+            obs, info = env.reset()
+            done = False
+            while not done:
+                env_action, _ = self.get_action(obs, deterministic=True)
+                obs, reward, terminated, truncated, info = env.step(env_action)
+                total_reward += reward
+                total_steps += 1
+                done = terminated or truncated
+
+        avg_reward_per_step = total_reward / max(1, total_steps)
+        return total_reward / test_episodes, avg_reward_per_step
+
+    def train(self, env, num_episodes=100, patience=3, eval_every=5):
         all_rewards = []
         global_step = 0
-        
         best_reward = -float('inf')
         patience_counter = 0
         best_weights = None
@@ -208,45 +200,46 @@ class DQNAgent(Agent):
                 step = 0
 
                 while True:
-                    # Select action
                     env_action, action_idx = self.get_action(obs)
                     next_obs, reward, terminated, truncated, info = env.step(env_action)
 
-                    # Store transition
                     flat_state = _flatten_obs(obs)
                     flat_next = _flatten_obs(next_obs)
                     done = terminated or truncated
                     self.replay_buffer.push(flat_state, action_idx, reward, flat_next, float(done))
 
-                    # Record reward
-                    all_rewards.append(reward)
                     episode_reward += reward
                     step += 1
                     global_step += 1
 
-                    # Learn from replay buffer
                     if len(self.replay_buffer) >= self.batch_size:
-                        self._learn()
+                        loss_val = self._learn()
+                        # KPI 3: Track TD Loss Error per optimization step
+                        self.writer.add_scalar("Loss/TD_Loss_Error", loss_val, global_step)
 
-                    # Sync target network
                     if global_step % self.target_update == 0:
                         self._target_net.load_state_dict(self._q_net.state_dict())
 
-                    # Decay exploration
                     self.epsilon_decay()
-
                     obs = next_obs
 
                     if done:
                         break
 
-                print(
-                    f"Episode {episode + 1}/{num_episodes} | "
-                    f"Steps: {step} | "
-                    f"Reward: {episode_reward:.2f} | "
-                    f"Epsilon: {self.epsilon:.4f}"
-                )
+                # KPI 1: Cumulative reward per epoch
+                self.writer.add_scalar("Reward/Train_Cumulative_Per_Epoch", episode_reward, episode)
+                all_rewards.append(episode_reward)
+
+                print(f"Episode {episode + 1}/{num_episodes} | Steps: {step} | Reward: {episode_reward:.2f} | Epsilon: {self.epsilon:.4f}")
                 
+                # Periodic KPI Evaluation
+                if (episode + 1) % eval_every == 0:
+                    eval_cum, eval_per_step = self.evaluate_test_epoch(env)
+                    # KPI 2: Average reward per step in test epoch
+                    self.writer.add_scalar("Reward/Test_Epoch_Cumulative", eval_cum, episode)
+                    self.writer.add_scalar("Reward/Test_Epoch_Avg_Reward_Per_Step", eval_per_step, episode)
+                    print(f" ---> [TEST] Cumulative: {eval_cum:.2f} | Avg Reward Per Step: {eval_per_step:.4f}")
+
                 # Early stopping check
                 if episode_reward > best_reward:
                     best_reward = episode_reward
@@ -265,42 +258,33 @@ class DQNAgent(Agent):
         except KeyboardInterrupt:
             print("\nTraining interrupted by user. Saving progress...")
             if best_weights is not None and best_reward > episode_reward:
-                print(f"Restoring best weights so far (Reward: {best_reward:.2f}).")
                 self._q_net.load_state_dict(best_weights)
                 self._target_net.load_state_dict(best_weights)
 
+        self.writer.close()
         return self._q_net, all_rewards
 
     def save(self, filepath):
-        """Save the Q-network weights to a file."""
         if self._q_net is None:
             raise ValueError("Cannot save weights; network not initialized.")
         torch.save(self._q_net.state_dict(), filepath)
         print(f"Agent weights saved to {filepath}")
 
     def load(self, filepath, obs_sample):
-        """Load Q-network weights and initialize the networks."""
-        self._ensure_networks(obs_sample)  # Build network structure first
+        self._ensure_networks(obs_sample)
         self._q_net.load_state_dict(torch.load(filepath, map_location=self.device, weights_only=True))
         self._target_net.load_state_dict(self._q_net.state_dict())
         print(f"Agent weights loaded from {filepath}")
 
-    # ---- internal ---------------------------------------------------------
-
     def _learn(self):
-        """Sample a mini-batch and do one gradient step."""
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(
-            self.batch_size
-        )
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.batch_size)
         
-        # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
         actions = torch.LongTensor(actions).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
         next_states = torch.FloatTensor(next_states).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
 
-        # Double DQN target: use online net to pick action, target net to evaluate
         with torch.no_grad():
             q_next_online = self._q_net(next_states)
             best_actions = torch.argmax(q_next_online, dim=1)
@@ -310,18 +294,14 @@ class DQNAgent(Agent):
 
             targets = rewards + self.gamma * q_target_vals * (1.0 - dones)
 
-        # Current Q values
         q_values = self._q_net(states)
         q_pred = q_values[torch.arange(self.batch_size), actions]
 
-        # Compute loss
         loss = self.criterion(q_pred, targets)
 
-        # Optimize
         self.optimizer.zero_grad()
         loss.backward()
-        
-        # Gradient clipping
         torch.nn.utils.clip_grad_norm_(self._q_net.parameters(), 1.0)
-        
         self.optimizer.step()
+
+        return float(loss.item())

@@ -46,7 +46,7 @@ def main():
       plot_learning_curve(
           rewards,
           label=agent.name,
-          output_filepath=os.path.join(args.output_dir, f"{args.agent}_plot.png"),
+          output_filepath=os.path.join(args.output_dir, f"{args.agent}_learning_curve.png"),
       )
 
     if hasattr(agent, "save"):

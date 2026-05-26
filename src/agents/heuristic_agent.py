@@ -1,5 +1,8 @@
 import utils.constants as const
 from agents.agent import Agent
+import matplotlib.pyplot as plt
+import numpy as np
+import os
 
 
 class HeuristicAgent(Agent):
@@ -11,6 +14,7 @@ class HeuristicAgent(Agent):
   
   def __init__(self, env):
     super().__init__(env)
+    self.rewards = []
 
   def get_action(self, state):
 
@@ -51,4 +55,30 @@ class HeuristicAgent(Agent):
   def train(self, env, num_episodes):
       """Heuristic agent doesn't train. Returns dummy values."""
       print(f"Heuristic Agent: No training required for {num_episodes} episodes.")
-      return None, []
+      state, _ = env.reset()
+      terminated = False
+      truncated = False
+      step = 0 
+      steps = []
+      avg_rewards_per_step = []
+      total_reward = 0
+      while not (terminated or truncated):
+        try:
+          action = self.get_action(state)
+          _, reward, terminated, truncated, info = env.step(action)
+          step += 1
+          total_reward += reward
+          
+          current_avg = total_reward / step
+          
+          steps.append(step)
+          avg_rewards_per_step.append(current_avg)
+          if (step + 1) % 100 == 0:
+              self.rewards.append(reward)
+              print(f"S {step + 1}: Reward = {reward:.2f}")
+        except KeyboardInterrupt:
+          print("Training interrupted by user.")
+          break
+
+      
+      return None, self.rewards

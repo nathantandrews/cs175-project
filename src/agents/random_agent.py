@@ -16,4 +16,4 @@ class RandomAgent(Agent):
     def train(self, env, num_episodes):
         """Random agent doesn't train. Returns dummy values."""
         print(f"Random Agent: No training required for {num_episodes} episodes.")
-        return None, []
+        
