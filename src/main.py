@@ -23,7 +23,9 @@ def build_agent(agent_name, env, args):
         epsilon=args.epsilon,
         decay_rate=args.decay_rate,
         min_eps=args.min_eps,
-        hidden_dim=getattr(args, "hidden_dim", 128)
+        hidden_dim=args.hidden_dim,
+        batch_size=args.batch_size,
+        target_update=args.target_update,
     )
   else:
     raise ValueError(f"Unknown agent: {agent_name}")
@@ -76,11 +78,39 @@ def main():
         print("Grid search currently only supports the DQN agent.")
         return
         
-    grid = {
-        "gamma": [0.95, 0.99],
-        "alpha": [1e-3, 1e-4],
-        "hidden_dim": [64, 128]
-    }
+    # Select the hyperparameter search grid based on --grid-type
+    if getattr(args, "grid_type", "standard") == "fast":
+        grid = {
+            "alpha": [3e-4, 1e-3],
+            "gamma": [0.99],
+            "hidden_dim": [128, 256]
+        }
+    elif getattr(args, "grid_type", "standard") == "comprehensive":
+        grid = {
+            "alpha": [1e-4, 3e-4, 1e-3],
+            "gamma": [0.95, 0.99],
+            "hidden_dim": [128, 256],
+            "decay_rate": [0.999, 0.9999],
+            "target_update": [1000, 2000]
+        }
+    elif getattr(args, "grid_type", "standard") == "custom" and getattr(args, "custom_grid", None):
+        try:
+            grid = json.loads(args.custom_grid)
+            if not isinstance(grid, dict):
+                raise ValueError("Custom grid must be a JSON dictionary.")
+        except Exception as e:
+            print(f"Error parsing custom JSON grid: {e}. Falling back to standard grid.")
+            grid = {
+                "alpha": [1e-4, 3e-4, 1e-3],
+                "gamma": [0.95, 0.99],
+                "hidden_dim": [128, 256]
+            }
+    else:  # standard (default)
+        grid = {
+            "alpha": [1e-4, 3e-4, 1e-3],
+            "gamma": [0.95, 0.99],
+            "hidden_dim": [128, 256]
+        }
     
     keys, values = zip(*grid.items())
     permutations = [dict(zip(keys, v)) for v in itertools.product(*values)]
