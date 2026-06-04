@@ -185,7 +185,7 @@ class DQNAgent(Agent):
         avg_reward_per_step = total_reward / max(1, total_steps)
         return total_reward / test_episodes, avg_reward_per_step
 
-    def train(self, env, num_episodes=100, patience=3, eval_every=5):
+    def train(self, env, num_episodes=100, patience=20, eval_every=5):
         all_rewards = []
         global_step = 0
         best_reward = -float('inf')
