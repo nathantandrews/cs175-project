@@ -7,7 +7,9 @@ from agents.random_agent import RandomAgent
 from agents.heuristic_agent import HeuristicAgent
 from agents.dueling_dqn_agent import DQNAgent
 from utils.argparse import parse_args
-from utils.plot import plot_learning_curve
+from utils.plot import plot_learning_curve, plot_action_distribution
+
+import numpy as np
 
 
 def build_agent(agent_name, env, args):
@@ -67,8 +69,14 @@ def main():
       agent.load(model_filepath, obs)
 
     print(f"\nEvaluating {agent.name} on {args.dataset}...")
-    test_reward, test_steps = agent.evaluate(env)
+    test_reward, test_steps, actions_taken = agent.evaluate(env)
+    print('unique', np.unique(actions_taken, return_counts=True))
     print(f"Test Result | Steps: {test_steps} | Total Reward: {test_reward:.2f}")
+    plot_action_distribution(
+        actions_taken,
+        output_dir=args.output_dir,
+        agent_name=agent.name
+    )
 
   elif args.mode == "grid_search":
     import itertools
@@ -131,7 +139,7 @@ def main():
         agent = build_agent(args.agent, env, args)
         
         _, rewards = agent.train(env, num_episodes=args.num_episodes)
-        test_reward, test_steps = agent.evaluate(env)
+        test_reward, test_steps, _ = agent.evaluate(env)
         
         print(f"Result -> Test Reward: {test_reward:.2f}")
         if test_reward > best_reward:

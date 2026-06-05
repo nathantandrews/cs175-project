@@ -36,9 +36,10 @@ class Agent(ABC):
         # Save epsilon if the agent uses it
         old_epsilon = getattr(self, "epsilon", None)
         if old_epsilon is not None:
-            self.epsilon = 0.0
+            self.epsilon = 0.05
 
         obs, info = env.reset()
+        actions_taken = []
         episode_reward = 0.0
         steps = 0
         done = False
@@ -52,6 +53,8 @@ class Agent(ABC):
                 
             next_obs, reward, terminated, truncated, info = env.step(env_action)
             episode_reward += reward
+            action = env_action.get("action", "unknown") if isinstance(env_action, dict) else env_action
+            actions_taken.append(action)
             steps += 1
             obs = next_obs
             done = terminated or truncated
@@ -60,4 +63,4 @@ class Agent(ABC):
         if old_epsilon is not None:
             self.epsilon = old_epsilon
 
-        return episode_reward, steps
+        return episode_reward, steps, actions_taken
