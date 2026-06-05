@@ -36,7 +36,7 @@ class Agent(ABC):
         # Save epsilon if the agent uses it
         old_epsilon = getattr(self, "epsilon", None)
         if old_epsilon is not None:
-            self.epsilon = 0.05
+            self.epsilon = 0.00
 
         obs, info = env.reset()
         actions_taken = []
