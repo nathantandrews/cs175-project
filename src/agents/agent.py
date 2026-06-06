@@ -41,6 +41,8 @@ class Agent(ABC):
         obs, info = env.reset()
         actions_taken = []
         episode_reward = 0.0
+        cumulative_rewards_history = []
+        rewards_history = []
         steps = 0
         done = False
 
@@ -53,6 +55,8 @@ class Agent(ABC):
                 
             next_obs, reward, terminated, truncated, info = env.step(env_action)
             episode_reward += reward
+            cumulative_rewards_history.append(episode_reward)
+            rewards_history.append(reward)
             action = env_action.get("action", "unknown") if isinstance(env_action, dict) else env_action
             actions_taken.append(action)
             steps += 1
@@ -63,4 +67,4 @@ class Agent(ABC):
         if old_epsilon is not None:
             self.epsilon = old_epsilon
 
-        return episode_reward, steps, actions_taken
+        return rewards_history, cumulative_rewards_history, steps, actions_taken

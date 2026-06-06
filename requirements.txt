@@ -36,6 +36,7 @@ nvidia-nvjitlink==13.0.88
 nvidia-nvshmem-cu13==3.4.5
 nvidia-nvtx==13.0.85
 packaging==26.2
+pandas==3.0.3
 pillow==12.2.0
 protobuf==7.35.0
 pyparsing==3.3.2

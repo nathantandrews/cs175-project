@@ -1,7 +1,7 @@
 data/
 __pycache__/
 *.npz
-*.pt
+
 *.png
 .git/
 runs/*
