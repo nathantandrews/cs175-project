@@ -36,19 +36,16 @@ def plot_learning_curve(reward_history, label="Agent", color="orange", window_si
         print("Error: The provided reward history is empty.")
         return
 
-    # 1. Compute the moving/rolling average (No np.diff needed!)
     if len(step_rewards) < window_size:
         print(f"Warning: Not enough data points ({len(step_rewards)}) for window size {window_size}. Plotting raw rewards instead.")
         rolling_avg = step_rewards
         x_axis = np.arange(len(rolling_avg))
         xlabel = "Simulation Steps"
     else:
-        # A larger uniform window dilutes isolated penalties, smoothing out the curve
         rolling_avg = np.convolve(step_rewards, np.ones(window_size)/window_size, mode='valid')
         x_axis = np.arange(window_size - 1, window_size - 1 + len(rolling_avg))
         xlabel = f"Simulation Steps (Rolling Window: {window_size} steps)"
         
-    # 2. Plotting using subplots
     fig, ax = plt.subplots(figsize=(10, 6))
     
     label_text = f"{label} ({window_size}-step MA)" if len(step_rewards) >= window_size else label
