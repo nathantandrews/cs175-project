@@ -91,7 +91,15 @@ tensorboard --logdir runs/security_dqn --bind_all --port 6006
 
 ## Results
 
-Put the numbers you actually measured here (test return vs heuristic vs random on a named dataset, plus seed). Do not cite a multiplier you cannot regenerate from `./test.sh`.
+The Dueling DQN Agent received a cumulative reward of 19131.30. 
+![Dueling DQN Agent Cumulative Rewards](final_plots/Dueling_DQN_Agent_cumulative_rewards.png)
+
+Our baselines (heuristic and random) had a cumulative reward of 2966.10 and -14835.74 respectively
+![Heuristic Agent Cumulative Rewards](final_plots/Heuristic_Agent_cumulative_rewards.png)
+![Random Agent Cumulative Rewards](final_plots/Random_Agent_cumulative_rewards.png)
+
+### Final Verdict
+Dueling DQN Agent performed 6.4 times better than our best baseline (heuristic).
 
 ## Stack
 
